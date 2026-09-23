@@ -1,0 +1,6 @@
+{
+  "name": "Z12 Voice v0",
+  "description": "Z12 Voice v0 - Suite de production vocale et audio IA : Text-to-Speech multilingue et dialectes arabes, clonage vocal instantané, Podcast Studio, Audiobook Studio et Master Mixer.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
