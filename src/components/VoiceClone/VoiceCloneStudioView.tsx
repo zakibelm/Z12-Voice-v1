@@ -291,7 +291,7 @@ export const VoiceCloneStudioView: React.FC<VoiceCloneStudioViewProps> = ({
       sampleText: clone.sampleText || testText,
       isCloned: true,
       clonedVoiceData: clone,
-      neuralVoice: clone.gender === 'female' ? 'Kore' : 'Charon'
+      neuralVoice: clone.gender === 'female' ? 'warm' : 'baritone'
     };
 
     setIsTestPlaying(true);

@@ -18,6 +18,14 @@ import { MasterMixerView } from './components/Mixer/MasterMixerView';
 import { Sparkles, Radio, ShieldCheck, Heart } from 'lucide-react';
 
 export default function App() {
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/health').then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { if (active) setAiReady(data.configured === true); })
+      .catch(() => { if (active) setAiReady(false); });
+    return () => { active = false; };
+  }, []);
   const [currentTab, setCurrentTab] = useState<StudioTab>('studio-vo');
   const [language, setLanguage] = useState<LanguageCode>('fr');
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -104,6 +112,11 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {aiReady === false && (
+          <p role="status" className="rounded-xl border border-amber-700 bg-amber-950/40 p-4 text-sm text-amber-200">
+            Prévisualisation : la génération IA attend la configuration OpenRouter et le choix des modèles et voix.
+          </p>
+        )}
         
         {/* Real-time Oscilloscope & Frequency Visualizer */}
         <section aria-label="Audio Visualizer">

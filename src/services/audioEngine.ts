@@ -1,13 +1,14 @@
 // Z12 Voice v0 - High-Fidelity Neural Audio Workstation Engine
-// Powered by Gemini Neural TTS 2026 Engine + Web Audio API 24kHz Studio DSP
+// Powered by OpenRouter Speech + Web Audio API 24kHz Studio DSP
 
-import { AudioSettings, VoicePersona } from '../types/studio';
+import type { AudioSettings, VoicePersona } from '../types/studio';
+import { encodeWav } from './wav.ts';
 
-export type SynthesisEngineStatus = 'idle' | 'synthesizing' | 'playing' | 'paused' | 'fallback';
+export type SynthesisEngineStatus = 'idle' | 'synthesizing' | 'playing' | 'paused' | 'fallback' | 'error';
 
 export interface AudioEngineStatusEvent {
   status: SynthesisEngineStatus;
-  engine: 'neural-gemini-2026' | 'browser-speech-fallback';
+  engine: 'openrouter' | 'browser-speech-fallback';
   voiceName?: string;
   duration?: number;
   error?: string;
@@ -258,9 +259,9 @@ class AudioEngineService {
 
   /**
    * Main synthesis method:
-   * 1. Uses Gemini 2026 Neural TTS API for lifelike, natural human speech.
-   * 2. Routes decoded 24kHz audio through Web Audio DSP (EQ, Compressor, Analyser).
-   * 3. Falls back gracefully to browser SpeechSynthesis only if offline/unreachable.
+   * 1. Uses OpenRouter Speech API for lifelike, natural human speech.
+   * 2. Routes decoded provider audio through Web Audio DSP (EQ, Compressor, Analyser).
+   * 3. Reports provider errors without substituting a different voice.
    */
   public async speak(
     text: string,
@@ -270,6 +271,8 @@ class AudioEngineService {
     onEnd?: () => void
   ): Promise<void> {
     this.stopSpeaking();
+    this.lastAudioBlob = null;
+    this.lastAudioUrl = null;
     const ctx = this.initAudioContext();
 
     const cleanText = this.cleanAcousticCues(text);
@@ -278,8 +281,8 @@ class AudioEngineService {
       return;
     }
 
-    // Determine target neural voice: 'Charon', 'Kore', 'Puck', 'Fenrir', 'Zephyr'
-    const neuralVoiceName = voice.neuralVoice || (voice.gender === 'female' ? 'Kore' : 'Charon');
+    // Determine target neural voice: 'baritone', 'warm', 'energetic', 'textured', 'bright'
+    const neuralVoiceName = voice.neuralVoice || (voice.gender === 'female' ? 'warm' : 'baritone');
     const cacheKey = `${voice.id}_${neuralVoiceName}_${cleanText}`;
 
     // Apply EQ and Volume settings to Web Audio graph
@@ -297,7 +300,7 @@ class AudioEngineService {
     try {
       this.notifyStatus({
         status: 'synthesizing',
-        engine: 'neural-gemini-2026',
+        engine: 'openrouter',
         voiceName: neuralVoiceName
       });
 
@@ -326,7 +329,7 @@ class AudioEngineService {
           throw new Error(data.error || 'Failed to synthesize audio');
         }
 
-        // Convert base64 WAV to ArrayBuffer and Blob
+        // Decode the provider MP3 and export the actual audio as WAV
         const binaryString = atob(data.audioBase64);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -334,11 +337,9 @@ class AudioEngineService {
           bytes[i] = binaryString.charCodeAt(i);
         }
 
-        const audioBlob = new Blob([bytes.buffer], { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        // Decode audio data into AudioBuffer
         const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+        const audioBlob = encodeWav(audioBuffer);
+        const audioUrl = URL.createObjectURL(audioBlob);
 
         audioData = {
           buffer: audioBuffer,
@@ -354,27 +355,17 @@ class AudioEngineService {
       this.lastAudioBlob = audioData.blob;
       this.lastAudioUrl = audioData.url;
 
-      // Play through Web Audio Graph
-      await this.playAudioBuffer(audioData.buffer, settings, cleanText, onProgress, onEnd);
-
       this.notifyStatus({
         status: 'playing',
-        engine: 'neural-gemini-2026',
+        engine: 'openrouter',
         voiceName: neuralVoiceName,
         duration: audioData.duration
       });
+      await this.playAudioBuffer(audioData.buffer, settings, cleanText, onProgress, onEnd);
 
     } catch (err: any) {
-      console.warn('Neural TTS synthesis unavailable, switching to browser local speech fallback:', err?.message || err);
-      this.notifyStatus({
-        status: 'fallback',
-        engine: 'browser-speech-fallback',
-        voiceName: voice.name,
-        error: err?.message
-      });
-
-      // Graceful fallback to browser speech synthesis WITHOUT robotic sawtooth buzz
-      this.speakWithBrowserFallback(cleanText, voice, settings, onProgress, onEnd);
+      this.notifyStatus({ status: 'error', engine: 'openrouter', error: err?.message || 'Synthèse indisponible.' });
+      if (onEnd) onEnd();
     }
   }
 
@@ -438,7 +429,7 @@ class AudioEngineService {
           this.bgmGainNode.gain.setTargetAtTime(settings.bgmVolume || 0.3, this.audioCtx.currentTime, 0.4);
         }
 
-        this.notifyStatus({ status: 'idle', engine: 'neural-gemini-2026' });
+        this.notifyStatus({ status: 'idle', engine: 'openrouter' });
 
         if (onProgress) {
           onProgress(100, cleanText.length);
@@ -534,7 +525,7 @@ class AudioEngineService {
 
     this.isSpeaking = false;
     this.currentUtterance = null;
-    this.notifyStatus({ status: 'idle', engine: 'neural-gemini-2026' });
+    this.notifyStatus({ status: 'idle', engine: 'openrouter' });
 
     // Restore BGM volume if ducked
     if (this.isBgmPlaying && this.bgmGainNode && this.audioCtx) {
@@ -545,7 +536,7 @@ class AudioEngineService {
   public pauseSpeaking() {
     if (this.audioCtx && this.currentSourceNode && this.audioCtx.state === 'running') {
       this.audioCtx.suspend();
-      this.notifyStatus({ status: 'paused', engine: 'neural-gemini-2026' });
+      this.notifyStatus({ status: 'paused', engine: 'openrouter' });
     } else if ('speechSynthesis' in window && this.isSpeaking) {
       window.speechSynthesis.pause();
     }
@@ -554,7 +545,7 @@ class AudioEngineService {
   public resumeSpeaking() {
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
       this.audioCtx.resume();
-      this.notifyStatus({ status: 'playing', engine: 'neural-gemini-2026' });
+      this.notifyStatus({ status: 'playing', engine: 'openrouter' });
     } else if ('speechSynthesis' in window) {
       window.speechSynthesis.resume();
     }
@@ -595,64 +586,10 @@ class AudioEngineService {
     return voices.find(v => v.default) || voices[0] || null;
   }
 
-  // --- Real WAV File Exporter ---
-  // If we have a synthesized neural recording, returns that authentic file.
-  // Otherwise generates high-grade 44.1kHz PCM wave.
-  public generateWavFile(text: string, voice: VoicePersona, durationSec: number = 5): Blob {
-    if (this.lastAudioBlob) {
-      return this.lastAudioBlob;
-    }
-
-    const sampleRate = 44100;
-    const numChannels = 2;
-    const numSamples = Math.floor(sampleRate * Math.max(2, durationSec));
-    const bytesPerSample = 2;
-    const blockAlign = numChannels * bytesPerSample;
-    const byteRate = sampleRate * blockAlign;
-    const dataSize = numSamples * blockAlign;
-    const buffer = new ArrayBuffer(44 + dataSize);
-    const view = new DataView(buffer);
-
-    this.writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + dataSize, true);
-    this.writeString(view, 8, 'WAVE');
-
-    this.writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, 16, true);
-
-    this.writeString(view, 36, 'data');
-    view.setUint32(40, dataSize, true);
-
-    const baseFreq = voice.gender === 'female' ? 220 : 125;
-    let offset = 44;
-    for (let i = 0; i < numSamples; i++) {
-      const t = i / sampleRate;
-      const envelope = (Math.sin(t * 8) * 0.5 + 0.5) * Math.sin(Math.min(Math.PI, (t / durationSec) * Math.PI));
-      const sample = envelope * (
-        0.5 * Math.sin(2 * Math.PI * baseFreq * t) +
-        0.3 * Math.sin(2 * Math.PI * baseFreq * 2.1 * t) +
-        0.15 * Math.sin(2 * Math.PI * baseFreq * 3.4 * t)
-      );
-
-      const intSample = Math.max(-32768, Math.min(32767, Math.floor(sample * 30000)));
-      view.setInt16(offset, intSample, true);
-      view.setInt16(offset + 2, intSample, true);
-      offset += 4;
-    }
-
-    return new Blob([buffer], { type: 'audio/wav' });
-  }
-
-  private writeString(view: DataView, offset: number, string: string) {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
+  // Export only the audio matching the requested text and voice.
+  public generateWavFile(text: string, voice: VoicePersona, _durationSec = 5): Blob | null {
+    const timbre = voice.neuralVoice || (voice.gender === 'female' ? 'warm' : 'baritone');
+    return this.cache.get(`${voice.id}_${timbre}_${this.cleanAcousticCues(text)}`)?.blob || null;
   }
 
   // --- Subtitles Exporter (SRT format) ---

@@ -42,7 +42,7 @@ export interface VoicePersona {
   clonedVoiceData?: ClonedVoice;
   countryFlag?: string;
   dialectKeywords?: string[];
-  neuralVoice?: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr';
+  neuralVoice?: 'energetic' | 'baritone' | 'warm' | 'textured' | 'bright';
 }
 
 export interface DialectOption {
