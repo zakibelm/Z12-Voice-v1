@@ -136,6 +136,7 @@ Le premier son produit par la machine ne fut pas un bip métallique, mais un sou
   const handleDownloadChapterWav = (chap: AudiobookChapter) => {
     const voice = VOICES.find(v => v.id === chap.voiceId) || VOICES[0];
     const blob = audioEngine.generateWavFile(chap.script, voice, chap.wordCount * 0.4);
+    if (!blob) { alert('Générez ce chapitre avant de l’exporter.'); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

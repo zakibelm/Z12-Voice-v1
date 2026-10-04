@@ -221,14 +221,7 @@ export const PodcastStudioView: React.FC<PodcastStudioViewProps> = ({
 
   // Export full podcast as WAV
   const handleDownloadFullPodcastWav = () => {
-    const fullText = lines.map(l => l.text).join(' ');
-    const blob = audioEngine.generateWavFile(fullText, VOICES[0], lines.length * 4);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `savio-podcast-episode-${Date.now()}.wav`;
-    a.click();
-    URL.revokeObjectURL(url);
+    alert('L’export complet nécessite un rendu assemblé de toutes les voix. Aucun fichier partiel ne sera exporté.');
   };
 
   return (

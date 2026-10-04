@@ -65,9 +65,9 @@ export const StudioVOView: React.FC<StudioVOViewProps> = ({
   // Neural Engine status and Timbre Override
   const [engineEvent, setEngineEvent] = useState<AudioEngineStatusEvent>({
     status: 'idle',
-    engine: 'neural-gemini-2026'
+    engine: 'openrouter'
   });
-  const [selectedNeuralTimbre, setSelectedNeuralTimbre] = useState<'default' | 'Charon' | 'Kore' | 'Puck' | 'Fenrir' | 'Zephyr'>('default');
+  const [selectedNeuralTimbre, setSelectedNeuralTimbre] = useState<'default' | 'baritone' | 'warm' | 'energetic' | 'textured' | 'bright'>('default');
 
   // Subscribe to audio engine status
   useEffect(() => {
@@ -288,7 +288,9 @@ export const StudioVOView: React.FC<StudioVOViewProps> = ({
   const handleDownloadWav = () => {
     const lastBlob = audioEngine.getLastAudioBlob();
     const estDuration = Math.max(3, Math.round((scriptText.split(/\s+/).length / 2.5)));
-    const blob = lastBlob || audioEngine.generateWavFile(scriptText, selectedVoice, estDuration);
+    const effectiveVoice = { ...selectedVoice, neuralVoice: selectedNeuralTimbre === 'default' ? selectedVoice.neuralVoice : selectedNeuralTimbre };
+    const blob = audioEngine.generateWavFile(scriptText, effectiveVoice, estDuration);
+    if (!blob) { alert('Générez cet audio avant de l’exporter.'); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -753,7 +755,7 @@ export const StudioVOView: React.FC<StudioVOViewProps> = ({
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
                       <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                      {language === 'ar' ? 'نموذج النبرة العصبية (Gemini Neural Engine)' : 'Modèle de Timbre Neuronal IA (Gemini 2026)'}
+                      {language === 'ar' ? 'نموذج النبرة العصبية (OpenRouter Neural Engine)' : 'Modèle de Timbre Neuronal IA (OpenRouter 2026)'}
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                       Studio 24kHz • Zéro Robotisation
@@ -762,12 +764,12 @@ export const StudioVOView: React.FC<StudioVOViewProps> = ({
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {[
-                      { id: 'default', label: 'Auto (Profil)', desc: selectedVoice.gender === 'female' ? 'Kore / Zephyr' : 'Charon / Puck' },
-                      { id: 'Charon', label: 'Charon', desc: 'Baryton profond & posé (Docu / Spots)' },
-                      { id: 'Kore', label: 'Kore', desc: 'Chaleureuse & douce (Récits / Darija)' },
-                      { id: 'Puck', label: 'Puck', desc: 'Dynamique & vivant (Pub / Tech)' },
-                      { id: 'Fenrir', label: 'Fenrir', desc: 'Texturé & puissant (Cinéma / Radio)' },
-                      { id: 'Zephyr', label: 'Zephyr', desc: 'Lumineuse & claire (Podcast)' },
+                      { id: 'default', label: 'Auto (Profil)', desc: selectedVoice.gender === 'female' ? 'warm / bright' : 'baritone / energetic' },
+                      { id: 'baritone', label: 'baritone', desc: 'Baryton profond & posé (Docu / Spots)' },
+                      { id: 'warm', label: 'warm', desc: 'Chaleureuse & douce (Récits / Darija)' },
+                      { id: 'energetic', label: 'energetic', desc: 'Dynamique & vivant (Pub / Tech)' },
+                      { id: 'textured', label: 'textured', desc: 'Texturé & puissant (Cinéma / Radio)' },
+                      { id: 'bright', label: 'bright', desc: 'Lumineuse & claire (Podcast)' },
                     ].map((timbre) => {
                       const isSel = selectedNeuralTimbre === timbre.id;
                       return (
@@ -893,10 +895,10 @@ export const StudioVOView: React.FC<StudioVOViewProps> = ({
                 }`} />
                 <div className="flex flex-col">
                   <span className="text-xs text-slate-200 font-medium">
-                    {engineEvent.status === 'synthesizing' ? (
+                    {engineEvent.status === 'error' ? engineEvent.error : engineEvent.status === 'synthesizing' ? (
                       <span className="text-amber-300 flex items-center gap-1.5 font-semibold">
                         <Sparkles className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                        Génération neuronale Gemini en cours...
+                        Génération neuronale OpenRouter en cours...
                       </span>
                     ) : isPlaying ? (
                       <span className="text-emerald-300 font-semibold">
@@ -907,7 +909,7 @@ export const StudioVOView: React.FC<StudioVOViewProps> = ({
                     )}
                   </span>
                   <span className="text-[10px] text-slate-500 font-mono">
-                    Moteur : {engineEvent.engine === 'neural-gemini-2026' ? '✨ Synthèse Neuronale Studio' : 'Navigateur Local'}
+                    Moteur : {engineEvent.engine === 'openrouter' ? '✨ Synthèse Neuronale Studio' : 'Navigateur Local'}
                   </span>
                 </div>
               </div>
